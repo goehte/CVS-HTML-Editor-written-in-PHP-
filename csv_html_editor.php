@@ -2,7 +2,7 @@
 /**
  * csv_html_editor.php
  * CSV HTML Editor (single-file, translations embedded)
- * Version 27
+ * Version 29
  *
  * Usage:
  *   Place this file in a web-accessible directory alongside a subfolder `tables/`.
@@ -170,9 +170,48 @@ if (!is_safe_csv_filename($csv_param)) {
 }
 
 /* -----------------------------
-   Paths for CSV and versions
+   Paths for CSV File
    ----------------------------- */
 $csv_path = $CSV_FOLDER . DIRECTORY_SEPARATOR . $csv_param;
+
+
+/* -----------------------------
+   Important: if the requested CSV does not exist, show an error for GET
+   and reject any modifying POST (do not create or edit file).
+   ----------------------------- */
+$file_exists = file_exists($csv_path);
+
+if (!$file_exists) {
+    // If request is GET -> show user-friendly "File not found" page and stop.
+    if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+        http_response_code(404);
+        ?>
+        <!doctype html><html><head><meta charset="utf-8"><title><?= htmlspecialchars($tr['file_not_found_title']) ?></title>
+        <style>body{font-family:sans-serif;margin:24px}.note{border:1px solid #ccc;padding:16px;border-radius:6px;background:#fff6f6;color:#222}</style>
+        </head><body>
+        <h1><?= htmlspecialchars($tr['file_not_found_title']) ?></h1>
+        <div class="note">
+          <p><?= htmlspecialchars($tr['file_not_found_msg']) ?> <code><?= htmlspecialchars($csv_param) ?></code>.</p>
+          <p><?= htmlspecialchars($tr['allowed_chars']) ?></p>
+          <p><a href="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>"><?= htmlspecialchars($tr['back']) ?></a></p>
+        </div>
+        </body></html>
+        <?php
+        exit;
+    }
+
+    // If request is POST and tries to modify/save, reject to avoid creating a new file.
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        http_response_code(400);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Error: Target CSV file does not exist on server. Aborting write.\n";
+        exit;
+    }
+}
+
+/* -----------------------------
+   Paths for CSV versions
+   ----------------------------- */
 $versions_root = $CSV_FOLDER . DIRECTORY_SEPARATOR . 'versions';
 $version_subdir = pathinfo($csv_param, PATHINFO_FILENAME) . '_versions';
 $versions_dir = $versions_root . DIRECTORY_SEPARATOR . $version_subdir;
