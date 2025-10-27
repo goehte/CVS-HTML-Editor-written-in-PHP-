@@ -2,7 +2,7 @@
 /**
  * csv_html_editor.php
  * CSV HTML Editor (single-file, translations embedded)
- * Version 21
+ * Version 27
  *
  * Usage:
  *   Place this file in a web-accessible directory alongside a subfolder `tables/`.
@@ -149,14 +149,15 @@ if (empty($csv_param)) {
     // Show simple instruction page
     http_response_code(200);
     ?>
-    <!doctype html><html><head><meta charset="utf-8"><title><?=htmlspecialchars($tr['no_filename_title'])?></title>
-    <style>body{font-family: sans-serif;margin:24px}.note{border:1px solid #ccc;padding:16px;border-radius:6px;background:#fafafa}</style>
+    <!DOCTYPE html>
+    <html><head><meta charset="utf-8"><title><?= htmlspecialchars($tr['no_filename_title']) ?></title>
+    <style>body{font-family:sans-serif;margin:24px}.note{border:1px solid #ccc;padding:16px;border-radius:6px;background:#fafafa}</style>
     </head><body>
     <h1>CSV Editor</h1>
     <div class="note">
-      <p><?=htmlspecialchars($tr['no_filename_msg'])?></p>
-      <p><?=htmlspecialchars($tr['example'])?> <code>csv_html_editor.php?csv_filename=data.csv</code></p>
-      <p><?=htmlspecialchars($tr['allowed_chars'])?></p>
+      <p><?= htmlspecialchars($tr['no_filename_msg']) ?></p>
+      <p><?= htmlspecialchars($tr['example']) ?> <code>csv_html_editor.php?csv_filename=data.csv</code></p>
+      <p><?= htmlspecialchars($tr['allowed_chars']) ?></p>
     </div>
     </body></html>
     <?php
@@ -367,54 +368,25 @@ $js_trans = [
 <meta charset="utf-8">
 <title>CSV Editor — <?= htmlspecialchars($csv_param) ?></title>
 <style>
-/* Harmonize button font sizes and remove underline from .btn anchors */
+/* (CSS preserved from earlier iteration) */
 body{font-family:sans-serif;margin:16px}
 table{border-collapse:collapse;width:100%}
 td,th{border:1px solid #666;padding:6px;vertical-align:top}
 td{min-width:80px}
 td[contenteditable="true"]{background:#eef}
-
-/* Ensure action buttons and top/bottom controls use the same font size */
-.actions button, .btn, .versionActions button, .versionActions a {
-    font-size: 13px; /* unified font size for all buttons/links displayed as buttons */
-}
-
-/* Action buttons visual style */
 .actions{white-space:nowrap;width:1%}
-.actions button{margin:0 2px;padding:6px 8px;border-radius:3px;border:none;cursor:pointer}
-
-/* Action colors */
+.actions button{margin:0 2px;padding:6px 8px;font-size:12px;border-radius:3px;border:none;cursor:pointer;font-size: 13px;}
 .btn-insert-above,.btn-insert-below{background:#28a745;color:#fff}
 .btn-delete{background:#dc3545;color:#fff}
-
-/* Primary buttons (top/bottom) and download link use same appearance
-   Remove underline on <a class="btn"> by forcing text-decoration none. */
-.btn{
-    display:inline-block;
-    padding:6px 10px;
-    background:#007bff;
-    color:#fff;
-    text-decoration:none; /* no underline */
-    border-radius:4px;
-    border:none;
-    cursor:pointer;
-    font-size:13px; /* unified */
-}
-
-/* Also ensure versionActions anchor styled like buttons has no underline */
-.versionActions a { text-decoration: none; font-size:13px; color:#007bff; }
-
-/* Toast and panel styling unchanged (kept from previous iteration) */
+.btn{display:inline-block;padding:6px 10px;background:#007bff;color:#fff;text-decoration:none;border-radius:4px;border:none;cursor:pointer;font-size:13px}
 .undoToast{background:#222;color:#fff;padding:10px 12px;margin-top:8px;border-radius:4px;display:flex;gap:8px;align-items:center;opacity:.95}
 .undoToast button{background:#fff;color:#000;border:none;padding:6px 8px;border-radius:3px;cursor:pointer}
 .panelToast{background:#eee;color:#555;padding:10px 12px;margin-top:8px;border-radius:4px;opacity:.95}
-.panelToast a{color:#8ecbff}
-.panelToast .muted{color:#999}
+.panelToast a{color:#8ecbff;font-size:13px}.panelToast .muted{color:#999}
 #controls{margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #controls-bottom{margin:12px 0;display:flex;gap:8px;align-items:center}
 #undoContainer{position:fixed;right:20px;bottom:20px;z-index:1000}
-.muted{color:#999;font-size:13px}
-.small{font-size:12px;color:#999}
+.muted{color:#999;font-size:13px}.small{font-size:12px;color:#999}
 .diffWrap{max-height:400px;overflow:auto;border:1px solid #ddd;background:#fff;padding:8px}
 .diffArea{margin:0;font-family:monospace;font-size:13px;color:#222}
 .diffAdd{background:#e6ffed;display:block;color:#1a7f37}
@@ -485,7 +457,7 @@ td[contenteditable="true"]{background:#eef}
       <div class="muted" style="margin-top:6px;"><?= htmlspecialchars($tr['no_versions_yet']) ?></div>
     <?php else: foreach ($versions as $v): ?>
       <div class="versionItem" style="display:flex;gap:8px;align-items:center;padding:6px;border-radius:4px;margin-bottom:6px;background:#fff;color:#555;">
-        <div style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"><?= htmlspecialchars($v['name']) ?> — <?= htmlspecialchars($v['mtime']) ?> — <?= round($v['size']/1024,2) ?> KB</div>
+        <div style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px"><?= htmlspecialchars($v['name']) ?> — <?= htmlspecialchars($v['mtime']) ?> — <?= round($v['size']/1024,2) ?> KB</div>
         <div class="versionActions" style="white-space:nowrap;">
           <a href="?diff_version=<?= urlencode($v['name']) ?>&csv_filename=<?= urlencode($csv_param) ?>"><?= htmlspecialchars($tr['show_diff']) ?></a>
           <form method="post" style="display:inline">
@@ -613,7 +585,8 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
   }
 
   function restoreDeletedEntryById(id) {
-    const idx = deletedStack.findIndex(e => e.id === id); if (idx === -1) return; const entry = deletedStack[idx]; restoreDeletedEntry(entry); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash();
+    const idx = deletedStack.findIndex(e => e.id === id); if (idx === -1) return;
+    const entry = deletedStack[idx]; restoreDeletedEntry(entry); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash();
   }
 
   function restoreDeletedEntry(entry) {
@@ -625,7 +598,8 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
   }
 
   function permanentlyRemoveEntryById(id) {
-    const idx = deletedStack.findIndex(e => e.id === id); if (idx === -1) return; const entry = deletedStack[idx]; if (entry.toastElem) entry.toastElem.remove(); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash();
+    const idx = deletedStack.findIndex(e => e.id === id); if (idx === -1) return;
+    const entry = deletedStack[idx]; if (entry.toastElem) entry.toastElem.remove(); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash();
   }
 
   function saveDeletedStack() {
@@ -644,9 +618,13 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
     trashList.innerHTML=''; if (deletedStack.length===0) { trashList.innerHTML = '<div class="muted"><?= htmlspecialchars($tr['trash_is_empty']) ?></div>'; return; }
     deletedStack.forEach(function(entry){ const div = document.createElement('div'); div.className='trashItem'; div.style.display='flex'; div.style.gap='8px'; div.style.alignItems='center'; div.style.padding='6px'; div.style.background='#fff'; div.style.color='#000'; div.style.borderRadius='4px'; div.style.marginBottom='6px';
       const preview = document.createElement('div'); preview.style.flex='1'; preview.style.whiteSpace='nowrap'; preview.style.overflow='hidden'; preview.style.textOverflow='ellipsis'; preview.textContent = entry.cells.join(' | ');
-      const actions = document.createElement('div'); const restoreBtn = document.createElement('button'); restoreBtn.type='button'; restoreBtn.textContent = I18N.labels.restore; const deleteBtn = document.createElement('button'); deleteBtn.type='button'; deleteBtn.textContent = I18N.labels.delete_permanent || 'Delete';
-      restoreBtn.addEventListener('click', function(){ restoreDeletedEntryById(entry.id); }); deleteBtn.addEventListener('click', function(){ if (confirm(I18N.confirm.delete_permanent)) permanentlyRemoveEntryById(entry.id); });
-      actions.appendChild(restoreBtn); actions.appendChild(deleteBtn); div.appendChild(preview); div.appendChild(actions); trashList.appendChild(div);
+      const actions = document.createElement('div');
+      const restoreBtn = document.createElement('button'); restoreBtn.type='button'; restoreBtn.textContent = I18N.labels.restore;
+      const deleteBtn = document.createElement('button'); deleteBtn.type='button'; deleteBtn.textContent = I18N.labels.delete_permanent || 'Delete';
+      restoreBtn.addEventListener('click', function(){ restoreDeletedEntryById(entry.id); });
+      deleteBtn.addEventListener('click', function(){ if (confirm(I18N.confirm.delete_permanent)) permanentlyRemoveEntryById(entry.id); });
+      actions.appendChild(restoreBtn); actions.appendChild(deleteBtn);
+      div.appendChild(preview); div.appendChild(actions); trashList.appendChild(div);
     });
   }
 
@@ -656,13 +634,64 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
     const undoBtn = document.createElement('button'); undoBtn.type='button'; undoBtn.textContent = I18N.labels.restore || 'Undo';
     const dismissBtn = document.createElement('button'); dismissBtn.type='button'; dismissBtn.textContent = I18N.labels.dismiss || 'Dismiss';
     const timerInfo = document.createElement('small'); timerInfo.textContent = '';
-    toast.appendChild(span); toast.appendChild(undoBtn); toast.appendChild(dismissBtn); toast.appendChild(timerInfo); undoContainer.appendChild(toast); entry.toastElem = toast;
+    toast.appendChild(span); toast.appendChild(undoBtn); toast.appendChild(dismissBtn); toast.appendChild(timerInfo);
+    undoContainer.appendChild(toast); entry.toastElem = toast;
     let remaining = Math.floor(UNDO_TIMEOUT_MS / 1000); timerInfo.textContent = ' ('+remaining+'s)';
     const intervalId = setInterval(function(){ remaining--; if (remaining <= 0) { timerInfo.textContent=''; clearInterval(intervalId); } else timerInfo.textContent = ' ('+remaining+'s)'; }, 1000);
     const timeoutId = setTimeout(function(){ if (entry.toastElem) entry.toastElem.remove(); entry.toastElem = null; clearInterval(intervalId); }, UNDO_TIMEOUT_MS);
     undoBtn.addEventListener('click', function(){ const idx = deletedStack.findIndex(e => e.id === entry.id); if (idx !== -1) { const e = deletedStack[idx]; restoreDeletedEntry(e); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash(); } clearTimeout(timeoutId); clearInterval(intervalId); if (entry.toastElem) entry.toastElem.remove(); });
     dismissBtn.addEventListener('click', function(){ clearTimeout(timeoutId); clearInterval(intervalId); if (entry.toastElem) entry.toastElem.remove(); entry.toastElem = null; });
   }
+
+  // Delegated row actions
+  table.addEventListener('click', function(e) {
+    const t = e.target;
+    if (t.matches('.btn-insert-above') || t.matches('.btn-insert-below') || t.matches('.btn-delete')) {
+      const tr = t.closest('tr');
+      const rows = Array.prototype.slice.call(tbody.rows);
+      const idx = rows.indexOf(tr);
+      if (t.matches('.btn-insert-above')) addRowAt(idx);
+      else if (t.matches('.btn-insert-below')) addRowAt(idx+1);
+      else if (t.matches('.btn-delete')) { if (confirm(I18N.confirm.delete_row)) deleteRowWithUndo(tr); }
+    }
+  });
+
+  document.getElementById('restoreAllBtn').addEventListener('click', function(){
+    if (deletedStack.length === 0) return;
+    if (!confirm(I18N.confirm.restore_all)) return;
+    const copy = deletedStack.slice(); copy.sort((a,b)=>a.index-b.index); copy.forEach(function(e){ restoreDeletedEntry(e); });
+    deletedStack = []; saveDeletedStack(); renderTrash();
+  });
+
+  document.getElementById('emptyTrashBtn').addEventListener('click', function(){
+    if (!confirm(I18N.confirm.empty_trash)) return; clearAllDeletedStack();
+  });
+
+  // csvForm submit
+  document.getElementById('csvForm').onsubmit = function() {
+    const data = []; const headerRow = table.tHead.rows[0]; const header = [];
+    for (let i=0;i<headerRow.cells.length;i++){ const th = headerRow.cells[i]; if (th.classList.contains('action')) continue; header.push(th.innerText); }
+    data.push(header);
+    const bodyRows = tbody.rows;
+    for (let r=0;r<bodyRows.length;r++){
+      const row = bodyRows[r]; const rowData = [];
+      for (let c=0;c<row.cells.length;c++){ const cell = row.cells[c]; if (cell.classList.contains('actions')) continue; rowData.push(cell.innerText); }
+      while (rowData.length < header.length) rowData.push(''); data.push(rowData);
+    }
+    deletedStack.forEach(function(e){ if (e.toastElem) e.toastElem.remove(); });
+    deletedStack = []; sessionStorage.removeItem(STORAGE_KEY); renderTrash();
+    document.getElementById('csv_data').value = JSON.stringify(data);
+    return true;
+  };
+
+  // Ctrl/Cmd+Z undo
+  document.addEventListener('keydown', function(e) {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modifier = isMac ? e.metaKey : e.ctrlKey;
+    if (modifier && e.key === 'z') {
+      if (deletedStack.length > 0) { e.preventDefault(); const last = deletedStack.pop(); restoreDeletedEntry(last); saveDeletedStack(); renderTrash(); }
+    }
+  });
 
   // init
   renderTrash();
