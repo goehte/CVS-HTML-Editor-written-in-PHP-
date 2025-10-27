@@ -1,56 +1,48 @@
 <?php
 /**
  * csv_html_editor.php
- * CSV HTML Editor (cleaned / documented)
+ * CSV HTML Editor (single-file, translations embedded)
  *
  * Usage:
  *   Place this file in a web-accessible directory alongside a subfolder `tables/`.
  *   Open in your browser: csv_html_editor.php?csv_filename=data.csv
  *
- * Notes:
- * - The script only opens CSV files that already exist in tables/.
- * - Versions are stored in tables/versions/<basename>_versions/
- * - Translations are loaded from translations.json (if present) and merged with defaults.
- *
- * Maintainers: keep translations.json up-to-date for new labels.
+ * This variant keeps all translations embedded in the PHP source (no external translations.json).
+ * The file is refactored and commented for maintainability.
  */
 
-/* --------------------------------------------------------------------------
-   Configuration (change if needed)
-   -------------------------------------------------------------------------- */
+/* -----------------------------
+   Configuration
+   ----------------------------- */
 declare(strict_types=1);
 
 $MAX_VERSIONS = 20;
 $CSV_FOLDER = __DIR__ . DIRECTORY_SEPARATOR . 'tables';
-$TRANSLATIONS_JSON = __DIR__ . DIRECTORY_SEPARATOR . 'translations.json';
 
-/* --------------------------------------------------------------------------
-   Ensure the tables directory exists
-   -------------------------------------------------------------------------- */
+/* -----------------------------
+   Ensure tables folder exists
+   ----------------------------- */
 if (!is_dir($CSV_FOLDER)) {
     @mkdir($CSV_FOLDER, 0755, true);
 }
 
-/* --------------------------------------------------------------------------
-   Helpers: filename validation
-   These prevent path traversal and restrict allowed characters.
-   -------------------------------------------------------------------------- */
+/* -----------------------------
+   Helper: filename validation
+   ----------------------------- */
 function is_safe_csv_filename(string $name): bool
 {
-    // Allow only basename with alphanum, dot, underscore, hyphen ending with .csv
     return (bool) preg_match('/^[A-Za-z0-9._-]+\.csv$/i', $name);
 }
-
 function is_safe_version_filename(string $name): bool
 {
-    // Version filenames are sanitized basenames (no path separators)
     return (bool) preg_match('/^[A-Za-z0-9._-]+$/', $name);
 }
 
-/* --------------------------------------------------------------------------
-   Load translations (JSON file optional)
-   - Default translations are embedded; translations.json will override keys.
-   -------------------------------------------------------------------------- */
+/* -----------------------------
+   Embedded translations (defaults)
+   - All translation strings live here.
+   - You can update phrases directly in this array.
+   ----------------------------- */
 $default_translations = [
     'en' => [
         'no_filename_title' => 'CSV Editor — No filename provided',
@@ -136,36 +128,24 @@ $default_translations = [
     ]
 ];
 
-// Merge translations.json into defaults if present
-$loaded = [];
-if (file_exists($TRANSLATIONS_JSON)) {
-    $raw = @file_get_contents($TRANSLATIONS_JSON);
-    $decoded = @json_decode($raw, true);
-    if (is_array($decoded)) {
-        $loaded = $decoded;
-    }
-}
-$T = $default_translations;
-foreach ($loaded as $lk => $map) {
-    if (!isset($T[$lk])) $T[$lk] = [];
-    $T[$lk] = array_merge($T[$lk], $map);
-}
-
-// Determine locale (server-side preference via Accept-Language)
+/* -----------------------------
+   Choose locale (server-side Accept-Language)
+   ----------------------------- */
 $locale = 'en';
 if (!empty($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
     $al = strtolower($_SERVER['HTTP_ACCEPT_LANGUAGE']);
-    if (strpos($al, 'de') === 0 || strpos($al, 'de-') === 0 || preg_match('/\bde\b/', $al)) $locale = 'de';
+    if (strpos($al, 'de') === 0 || strpos($al, 'de-') === 0 || preg_match('/\bde\b/', $al)) {
+        $locale = 'de';
+    }
 }
-$tr = $T[$locale] ?? $T['en'];
+$tr = $default_translations[$locale] ?? $default_translations['en'];
 
-/* -----------------------
-   Request parameter: csv_filename
-   ----------------------- */
+/* -----------------------------
+   Get csv_filename request param
+   ----------------------------- */
 $csv_param = isset($_REQUEST['csv_filename']) ? basename($_REQUEST['csv_filename']) : null;
-
 if (empty($csv_param)) {
-    // render a short instructive page when no filename provided
+    // Show simple instruction page
     http_response_code(200);
     ?>
     <!doctype html><html><head><meta charset="utf-8"><title><?=htmlspecialchars($tr['no_filename_title'])?></title>
@@ -181,22 +161,24 @@ if (empty($csv_param)) {
     <?php
     exit;
 }
-
-// Validate filename
 if (!is_safe_csv_filename($csv_param)) {
     http_response_code(400);
     echo 'Invalid csv_filename parameter.';
     exit;
 }
 
-// Compute file paths
+/* -----------------------------
+   Paths for CSV and versions
+   ----------------------------- */
 $csv_path = $CSV_FOLDER . DIRECTORY_SEPARATOR . $csv_param;
 $versions_root = $CSV_FOLDER . DIRECTORY_SEPARATOR . 'versions';
 $version_subdir = pathinfo($csv_param, PATHINFO_FILENAME) . '_versions';
 $versions_dir = $versions_root . DIRECTORY_SEPARATOR . $version_subdir;
 if (!is_dir($versions_dir)) @mkdir($versions_dir, 0755, true);
 
-// --- Small LCS-based diff helper (line-based) ---
+/* -----------------------------
+   Diff helper (simple LCS for lines)
+   ----------------------------- */
 function compute_diff_html(array $oldLines, array $newLines): string
 {
     $n = count($oldLines);
@@ -228,11 +210,9 @@ function compute_diff_html(array $oldLines, array $newLines): string
     return $html;
 }
 
-/* --------------------------------------------------------------------------
-   HTTP handlers (download, diff, version download, restore/delete, save)
-   The order matters: downloads served and exit. POST save runs after JS
-   has populated csv_data.
-   -------------------------------------------------------------------------- */
+/* -----------------------------
+   HTTP handlers (downloads, diff, restore/delete, save)
+   ----------------------------- */
 
 /* Download current CSV (GET) */
 if (isset($_GET['download_current'])) {
@@ -265,15 +245,11 @@ if (isset($_GET['diff_version'])) {
             }
             $diff_html = compute_diff_html($versionLines, $currentLines);
             $diff_version_name = $vf;
-        } else {
-            $diff_html = '<div class="muted">Version file not found.</div>';
-        }
-    } else {
-        $diff_html = '<div class="muted">Invalid version name.</div>';
-    }
+        } else $diff_html = '<div class="muted">Version file not found.</div>';
+    } else $diff_html = '<div class="muted">Invalid version name.</div>';
 }
 
-/* Download a specific version (GET) */
+/* Download a version (GET) */
 if (isset($_GET['download_version'])) {
     $vf = basename($_GET['download_version']);
     if (!is_safe_version_filename($vf)) { http_response_code(400); exit('Invalid filename'); }
@@ -288,8 +264,8 @@ if (isset($_GET['download_version'])) {
 
 /* Restore version (POST) */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_version'])) {
-    $posted = isset($_POST['csv_filename']) ? basename($_POST['csv_filename']) : '';
-    if ($posted !== $csv_param) { header("Location: ".$_SERVER['PHP_SELF']."?csv_filename=".urlencode($csv_param)); exit; }
+    $posted_csv = isset($_POST['csv_filename']) ? basename($_POST['csv_filename']) : '';
+    if ($posted_csv !== $csv_param) { header("Location: ".$_SERVER['PHP_SELF']."?csv_filename=".urlencode($csv_param)); exit; }
     $vf = basename($_POST['restore_version'] ?? '');
     if (!is_safe_version_filename($vf)) { header("Location: ".$_SERVER['PHP_SELF']."?csv_filename=".urlencode($csv_param)); exit; }
     $vpath = $versions_dir . DIRECTORY_SEPARATOR . $vf;
@@ -306,8 +282,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restore_version'])) {
 
 /* Delete version (POST) */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_version'])) {
-    $posted = isset($_POST['csv_filename']) ? basename($_POST['csv_filename']) : '';
-    if ($posted !== $csv_param) { header("Location: ".$_SERVER['PHP_SELF']."?csv_filename=".urlencode($csv_param)); exit; }
+    $posted_csv = isset($_POST['csv_filename']) ? basename($_POST['csv_filename']) : '';
+    if ($posted_csv !== $csv_param) { header("Location: ".$_SERVER['PHP_SELF']."?csv_filename=".urlencode($csv_param)); exit; }
     $vf = basename($_POST['delete_version'] ?? '');
     if (is_safe_version_filename($vf)) {
         $vpath = $versions_dir . DIRECTORY_SEPARATOR . $vf;
@@ -317,28 +293,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_version'])) {
     exit;
 }
 
-/* Save main CSV (POST) — csv_data set by client JS (JSON array of rows) */
+/* Save CSV (POST) */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['csv_data']) && !isset($_POST['restore_version']) && !isset($_POST['delete_version'])) {
-    $posted = isset($_POST['csv_filename']) ? basename($_POST['csv_filename']) : '';
-    if ($posted !== $csv_param) {
-        header("Location: ".$_SERVER['PHP_SELF']."?csv_filename=".urlencode($csv_param));
-        exit;
-    }
+    $posted_csv = isset($_POST['csv_filename']) ? basename($_POST['csv_filename']) : '';
+    if ($posted_csv !== $csv_param) { header("Location: ".$_SERVER['PHP_SELF']."?csv_filename=".urlencode($csv_param)); exit; }
     $rows = json_decode($_POST['csv_data'], true);
-    // Save previous content as a version before overwriting
     if (file_exists($csv_path)) {
         $ts = date('Ymd_His');
         $version_name = "data_{$ts}.csv";
         @copy($csv_path, $versions_dir . DIRECTORY_SEPARATOR . $version_name);
-        // Rotate
         $files = glob($versions_dir . DIRECTORY_SEPARATOR . "data_*.csv");
-        usort($files, function($a,$b){ return filemtime($b) - filemtime($a); });
+        usort($files, function($a, $b) { return filemtime($b) - filemtime($a); });
         if (count($files) > $MAX_VERSIONS) {
             $to_delete = array_slice($files, $MAX_VERSIONS);
             foreach ($to_delete as $f) @unlink($f);
         }
     }
-    // Write CSV
     $fp = fopen($csv_path, 'w');
     if ($fp) {
         foreach ($rows as $row) {
@@ -351,9 +321,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['csv_data']) && !isset
     exit;
 }
 
-/* --------------------------------------------------------------------------
-   Load CSV into memory for rendering
-   -------------------------------------------------------------------------- */
+/* -----------------------------
+   Load CSV & versions for rendering
+   ----------------------------- */
 $rows = [];
 if (file_exists($csv_path) && ($h = fopen($csv_path, 'r')) !== false) {
     while (($data = fgetcsv($h)) !== false) $rows[] = $data;
@@ -361,21 +331,14 @@ if (file_exists($csv_path) && ($h = fopen($csv_path, 'r')) !== false) {
 }
 if (empty($rows)) $rows[] = [''];
 
-/* --------------------------------------------------------------------------
-   Load versions list (sorted newest first)
-   -------------------------------------------------------------------------- */
 $versions = [];
 if (is_dir($versions_dir)) {
     $files = glob($versions_dir . DIRECTORY_SEPARATOR . "*.csv");
     usort($files, function($a,$b){ return filemtime($b) - filemtime($a); });
-    foreach ($files as $f) {
-        $versions[] = ['name' => basename($f), 'mtime' => date('Y-m-d H:i:s', filemtime($f)), 'size' => filesize($f)];
-    }
+    foreach ($files as $f) $versions[] = ['name'=>basename($f),'mtime'=>date('Y-m-d H:i:s',filemtime($f)),'size'=>filesize($f)];
 }
 
-/* --------------------------------------------------------------------------
-   JS translation payload: keep it minimal but complete
-   -------------------------------------------------------------------------- */
+/* JS translation payload */
 $js_trans = [
     'lang' => $locale,
     'confirm' => [
@@ -396,33 +359,61 @@ $js_trans = [
         'row_deleted' => $tr['row_deleted']
     ]
 ];
-
 ?>
-<!doctype html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>CSV Editor — <?= htmlspecialchars($csv_param) ?></title>
 <style>
-/* (CSS kept minimal; colors defined earlier in previous iterations) */
+/* Harmonize button font sizes and remove underline from .btn anchors */
 body{font-family:sans-serif;margin:16px}
 table{border-collapse:collapse;width:100%}
 td,th{border:1px solid #666;padding:6px;vertical-align:top}
 td{min-width:80px}
 td[contenteditable="true"]{background:#eef}
+
+/* Ensure action buttons and top/bottom controls use the same font size */
+.actions button, .btn, .versionActions button, .versionActions a {
+    font-size: 13px; /* unified font size for all buttons/links displayed as buttons */
+}
+
+/* Action buttons visual style */
 .actions{white-space:nowrap;width:1%}
-.actions button{margin:0 2px;padding:6px 8px;font-size:12px;border-radius:3px;border:none;cursor:pointer}
+.actions button{margin:0 2px;padding:6px 8px;border-radius:3px;border:none;cursor:pointer}
+
+/* Action colors */
 .btn-insert-above,.btn-insert-below{background:#28a745;color:#fff}
 .btn-delete{background:#dc3545;color:#fff}
-.btn{display:inline-block;padding:6px 10px;background:#007bff;color:#fff;border-radius:4px;border:none;cursor:pointer}
+
+/* Primary buttons (top/bottom) and download link use same appearance
+   Remove underline on <a class="btn"> by forcing text-decoration none. */
+.btn{
+    display:inline-block;
+    padding:6px 10px;
+    background:#007bff;
+    color:#fff;
+    text-decoration:none; /* no underline */
+    border-radius:4px;
+    border:none;
+    cursor:pointer;
+    font-size:13px; /* unified */
+}
+
+/* Also ensure versionActions anchor styled like buttons has no underline */
+.versionActions a { text-decoration: none; font-size:13px; color:#007bff; }
+
+/* Toast and panel styling unchanged (kept from previous iteration) */
 .undoToast{background:#222;color:#fff;padding:10px 12px;margin-top:8px;border-radius:4px;display:flex;gap:8px;align-items:center;opacity:.95}
 .undoToast button{background:#fff;color:#000;border:none;padding:6px 8px;border-radius:3px;cursor:pointer}
 .panelToast{background:#eee;color:#555;padding:10px 12px;margin-top:8px;border-radius:4px;opacity:.95}
-.panelToast a{color:#8ecbff}.panelToast .muted{color:#999}
+.panelToast a{color:#8ecbff}
+.panelToast .muted{color:#999}
 #controls{margin:10px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #controls-bottom{margin:12px 0;display:flex;gap:8px;align-items:center}
 #undoContainer{position:fixed;right:20px;bottom:20px;z-index:1000}
-.muted{color:#999;font-size:13px}.small{font-size:12px;color:#999}
+.muted{color:#999;font-size:13px}
+.small{font-size:12px;color:#999}
 .diffWrap{max-height:400px;overflow:auto;border:1px solid #ddd;background:#fff;padding:8px}
 .diffArea{margin:0;font-family:monospace;font-size:13px;color:#222}
 .diffAdd{background:#e6ffed;display:block;color:#1a7f37}
@@ -442,30 +433,30 @@ td[contenteditable="true"]{background:#eef}
 </div>
 
 <table id="csvTable">
-  <thead>
-    <tr>
-      <?php foreach ($rows[0] as $header): ?><th><?= htmlspecialchars($header) ?></th><?php endforeach; ?>
-      <th class="action"><?= htmlspecialchars($tr['actions']) ?></th>
-    </tr>
-  </thead>
-  <tbody>
-    <?php foreach (array_slice($rows, 1) as $row): ?>
-      <tr>
-        <?php foreach ($row as $cell): ?><td contenteditable="true"><?= htmlspecialchars($cell) ?></td><?php endforeach; ?>
-        <?php
-          $numHeaderCols = count($rows[0]);
-          $numCells = count($row);
-          for ($i = $numCells; $i < $numHeaderCols; $i++): ?>
-            <td contenteditable="true"></td>
-        <?php endfor; ?>
-        <td class="actions">
-          <button type="button" class="btn-insert-above"><?= htmlspecialchars($tr['insert_above']) ?></button>
-          <button type="button" class="btn-insert-below"><?= htmlspecialchars($tr['insert_below']) ?></button>
-          <button type="button" class="btn-delete"><?= htmlspecialchars($tr['delete']) ?></button>
-        </td>
-      </tr>
-    <?php endforeach; ?>
-  </tbody>
+<thead>
+<tr>
+<?php foreach ($rows[0] as $header): ?><th><?= htmlspecialchars($header) ?></th><?php endforeach; ?>
+<th class="action"><?= htmlspecialchars($tr['actions']) ?></th>
+</tr>
+</thead>
+<tbody>
+<?php foreach (array_slice($rows, 1) as $row): ?>
+<tr>
+  <?php foreach ($row as $cell): ?><td contenteditable="true"><?= htmlspecialchars($cell) ?></td><?php endforeach; ?>
+  <?php
+    $numHeaderCols = count($rows[0]);
+    $numCells = count($row);
+    for ($i = $numCells; $i < $numHeaderCols; $i++): ?>
+      <td contenteditable="true"></td>
+  <?php endfor; ?>
+  <td class="actions">
+    <button type="button" class="btn-insert-above"><?= htmlspecialchars($tr['insert_above']) ?></button>
+    <button type="button" class="btn-insert-below"><?= htmlspecialchars($tr['insert_below']) ?></button>
+    <button type="button" class="btn-delete"><?= htmlspecialchars($tr['delete']) ?></button>
+  </td>
+</tr>
+<?php endforeach; ?>
+</tbody>
 </table>
 
 <div id="controls-bottom">
@@ -535,14 +526,11 @@ td[contenteditable="true"]{background:#eef}
 <div id="undoContainer"></div>
 
 <script>
-/* Client-side I18N and UI logic
-   - All runtime strings come from the I18N payload.
-   - No remaining hard-coded English in dynamic UI.
-*/
+/* Client-side translations and UI behavior */
 const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
 
-// Merge a small German fallback if client prefers 'de' and server isn't de
-(function(){
+/* prefer client-side German if available (merge) */
+(function() {
   const clientLang = (navigator.language || navigator.userLanguage || '').toLowerCase();
   if (clientLang && clientLang.startsWith('de') && I18N.lang !== 'de') {
     const deFallback = {
@@ -569,7 +557,7 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
   }
 })();
 
-/* Main UI code (unchanged logic but using I18N values) */
+/* Main JS UI code (uses I18N for texts) */
 (function() {
   const STORAGE_KEY = 'csv_deleted_rows_v1_' + encodeURIComponent('<?= rawurlencode($csv_param) ?>');
   const UNDO_TIMEOUT_MS = 30000;
@@ -583,17 +571,10 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
   let deletedStack = loadDeletedStack();
 
   function numDataCols() { return table.tHead.rows[0].cells.length - 1; }
-
-  function createDataCell(text) {
-    const td = document.createElement('td');
-    td.setAttribute('contenteditable', 'true');
-    td.innerText = text || '';
-    return td;
-  }
+  function createDataCell(text) { const td = document.createElement('td'); td.setAttribute('contenteditable','true'); td.innerText = text || ''; return td; }
 
   function createActionCell() {
-    const td = document.createElement('td');
-    td.className = 'actions';
+    const td = document.createElement('td'); td.className = 'actions';
     const btnAbove = document.createElement('button'); btnAbove.type='button'; btnAbove.className='btn-insert-above'; btnAbove.textContent = I18N.labels.insert_above;
     const btnBelow = document.createElement('button'); btnBelow.type='button'; btnBelow.className='btn-insert-below'; btnBelow.textContent = I18N.labels.insert_below;
     const btnDelete = document.createElement('button'); btnDelete.type='button'; btnDelete.className='btn-delete'; btnDelete.textContent = I18N.labels.delete;
@@ -603,10 +584,7 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
 
   function buildRowFromData(cellsData) {
     const tr = document.createElement('tr');
-    for (let i = 0; i < numDataCols(); i++) {
-      const text = (i < cellsData.length) ? cellsData[i] : '';
-      tr.appendChild(createDataCell(text));
-    }
+    for (let i=0;i<numDataCols();i++) tr.appendChild(createDataCell((i < cellsData.length) ? cellsData[i] : ''));
     tr.appendChild(createActionCell());
     return tr;
   }
@@ -614,8 +592,7 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
   function addRowAt(index) {
     const tr = buildRowFromData([]);
     const rows = tbody.rows;
-    if (index >= 0 && index < rows.length) tbody.insertBefore(tr, rows[index]);
-    else tbody.appendChild(tr);
+    if (index >= 0 && index < rows.length) tbody.insertBefore(tr, rows[index]); else tbody.appendChild(tr);
     if (tr.cells.length) tr.cells[0].focus();
   }
 
@@ -624,97 +601,51 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
   function pushDeletedRow(cellsData, index, showToast=true) {
     while (deletedStack.length >= UNDO_LIMIT) deletedStack.shift();
     const entry = { id: generateId(), cells: cellsData.slice(), index: index, ts: Date.now(), toastElem: null };
-    deletedStack.push(entry);
-    saveDeletedStack();
-    renderTrash();
-    if (showToast) showUndoToast(entry);
+    deletedStack.push(entry); saveDeletedStack(); renderTrash(); if (showToast) showUndoToast(entry);
   }
 
   function deleteRowWithUndo(tr) {
     if (!tr) return;
     const cells = [];
-    for (let i=0;i<tr.cells.length;i++){
-      const cell = tr.cells[i];
-      if (cell.classList && cell.classList.contains('actions')) continue;
-      cells.push(cell.innerText);
-    }
-    const rows = Array.prototype.slice.call(tbody.rows);
-    const idx = rows.indexOf(tr);
-    tbody.removeChild(tr);
-    pushDeletedRow(cells, idx, true);
+    for (let i=0;i<tr.cells.length;i++){ const cell = tr.cells[i]; if (cell.classList && cell.classList.contains('actions')) continue; cells.push(cell.innerText); }
+    const rows = Array.prototype.slice.call(tbody.rows); const idx = rows.indexOf(tr); tbody.removeChild(tr); pushDeletedRow(cells, idx, true);
   }
 
   function restoreDeletedEntryById(id) {
-    const idx = deletedStack.findIndex(e => e.id === id);
-    if (idx === -1) return;
-    const entry = deletedStack[idx];
-    restoreDeletedEntry(entry);
-    deletedStack.splice(idx, 1);
-    saveDeletedStack();
-    renderTrash();
+    const idx = deletedStack.findIndex(e => e.id === id); if (idx === -1) return; const entry = deletedStack[idx]; restoreDeletedEntry(entry); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash();
   }
 
   function restoreDeletedEntry(entry) {
     const insertIndex = Math.max(0, Math.min(entry.index, tbody.rows.length));
     const tr = buildRowFromData(entry.cells);
     const rows = tbody.rows;
-    if (insertIndex < rows.length) tbody.insertBefore(tr, rows[insertIndex]);
-    else tbody.appendChild(tr);
-    if (tr.cells.length) tr.cells[0].focus();
-    if (entry.toastElem) { entry.toastElem.remove(); entry.toastElem = null; }
+    if (insertIndex < rows.length) tbody.insertBefore(tr, rows[insertIndex]); else tbody.appendChild(tr);
+    if (tr.cells.length) tr.cells[0].focus(); if (entry.toastElem) { entry.toastElem.remove(); entry.toastElem = null; }
   }
 
   function permanentlyRemoveEntryById(id) {
-    const idx = deletedStack.findIndex(e => e.id === id);
-    if (idx === -1) return;
-    const entry = deletedStack[idx];
-    if (entry.toastElem) entry.toastElem.remove();
-    deletedStack.splice(idx, 1);
-    saveDeletedStack();
-    renderTrash();
+    const idx = deletedStack.findIndex(e => e.id === id); if (idx === -1) return; const entry = deletedStack[idx]; if (entry.toastElem) entry.toastElem.remove(); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash();
   }
 
   function saveDeletedStack() {
-    try {
-      const serial = deletedStack.map(e => ({ id: e.id, cells: e.cells, index: e.index, ts: e.ts }));
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(serial));
-    } catch (err) { console.warn('Failed to save deleted rows', err); }
+    try { const serial = deletedStack.map(e => ({ id:e.id, cells:e.cells, index:e.index, ts:e.ts })); sessionStorage.setItem(STORAGE_KEY, JSON.stringify(serial)); }
+    catch (err) { console.warn('Failed to save deleted rows', err); }
   }
 
   function loadDeletedStack() {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      const arr = JSON.parse(raw);
-      return arr.map(e => ({ id: e.id, cells: e.cells, index: e.index, ts: e.ts, toastElem: null }));
-    } catch (err) { console.warn('Failed to load deleted rows', err); return []; }
+    try { const raw = sessionStorage.getItem(STORAGE_KEY); if (!raw) return []; const arr = JSON.parse(raw); return arr.map(e=>({ id:e.id, cells:e.cells, index:e.index, ts:e.ts, toastElem:null })); }
+    catch (err) { console.warn('Failed to load deleted rows', err); return []; }
   }
 
-  function clearAllDeletedStack() {
-    deletedStack.forEach(e => { if (e.toastElem) e.toastElem.remove(); });
-    deletedStack = []; sessionStorage.removeItem(STORAGE_KEY); renderTrash();
-  }
+  function clearAllDeletedStack() { deletedStack.forEach(e=>{ if (e.toastElem) e.toastElem.remove(); }); deletedStack=[]; sessionStorage.removeItem(STORAGE_KEY); renderTrash(); }
 
   function renderTrash() {
-    trashList.innerHTML = '';
-    if (deletedStack.length === 0) {
-      trashList.innerHTML = '<div class="muted"><?= htmlspecialchars($tr['trash_is_empty']) ?></div>';
-      return;
-    }
-    deletedStack.forEach(function(entry){
-      const div = document.createElement('div');
-      div.className = 'trashItem';
-      div.style.display='flex'; div.style.gap='8px'; div.style.alignItems='center'; div.style.padding='6px'; div.style.background='#fff'; div.style.color='#000'; div.style.borderRadius='4px'; div.style.marginBottom='6px';
-      const preview = document.createElement('div'); preview.style.flex='1'; preview.style.whiteSpace='nowrap'; preview.style.overflow='hidden'; preview.style.textOverflow='ellipsis';
-      preview.textContent = entry.cells.join(' | ');
-      const actions = document.createElement('div');
-      const restoreBtn = document.createElement('button'); restoreBtn.type='button'; restoreBtn.textContent = I18N.labels.restore;
-      const deleteBtn = document.createElement('button'); deleteBtn.type='button'; deleteBtn.textContent = I18N.labels.delete_permanent || 'Delete';
-      restoreBtn.addEventListener('click', function(){ restoreDeletedEntryById(entry.id); });
-      deleteBtn.addEventListener('click', function(){ if (confirm(I18N.confirm.delete_permanent)) permanentlyRemoveEntryById(entry.id); });
-      actions.appendChild(restoreBtn); actions.appendChild(deleteBtn);
-      div.appendChild(preview); div.appendChild(actions);
-      trashList.appendChild(div);
+    trashList.innerHTML=''; if (deletedStack.length===0) { trashList.innerHTML = '<div class="muted"><?= htmlspecialchars($tr['trash_is_empty']) ?></div>'; return; }
+    deletedStack.forEach(function(entry){ const div = document.createElement('div'); div.className='trashItem'; div.style.display='flex'; div.style.gap='8px'; div.style.alignItems='center'; div.style.padding='6px'; div.style.background='#fff'; div.style.color='#000'; div.style.borderRadius='4px'; div.style.marginBottom='6px';
+      const preview = document.createElement('div'); preview.style.flex='1'; preview.style.whiteSpace='nowrap'; preview.style.overflow='hidden'; preview.style.textOverflow='ellipsis'; preview.textContent = entry.cells.join(' | ');
+      const actions = document.createElement('div'); const restoreBtn = document.createElement('button'); restoreBtn.type='button'; restoreBtn.textContent = I18N.labels.restore; const deleteBtn = document.createElement('button'); deleteBtn.type='button'; deleteBtn.textContent = I18N.labels.delete_permanent || 'Delete';
+      restoreBtn.addEventListener('click', function(){ restoreDeletedEntryById(entry.id); }); deleteBtn.addEventListener('click', function(){ if (confirm(I18N.confirm.delete_permanent)) permanentlyRemoveEntryById(entry.id); });
+      actions.appendChild(restoreBtn); actions.appendChild(deleteBtn); div.appendChild(preview); div.appendChild(actions); trashList.appendChild(div);
     });
   }
 
@@ -724,86 +655,15 @@ const I18N = <?= json_encode($js_trans, JSON_UNESCAPED_UNICODE) ?>;
     const undoBtn = document.createElement('button'); undoBtn.type='button'; undoBtn.textContent = I18N.labels.restore || 'Undo';
     const dismissBtn = document.createElement('button'); dismissBtn.type='button'; dismissBtn.textContent = I18N.labels.dismiss || 'Dismiss';
     const timerInfo = document.createElement('small'); timerInfo.textContent = '';
-    toast.appendChild(span); toast.appendChild(undoBtn); toast.appendChild(dismissBtn); toast.appendChild(timerInfo);
-    undoContainer.appendChild(toast);
-    entry.toastElem = toast;
-    let remaining = Math.floor(UNDO_TIMEOUT_MS/1000); timerInfo.textContent = ' ('+remaining+'s)';
-    const intervalId = setInterval(function(){ remaining--; if (remaining <= 0) { timerInfo.textContent=''; clearInterval(intervalId);} else timerInfo.textContent=' ('+remaining+'s)'; }, 1000);
+    toast.appendChild(span); toast.appendChild(undoBtn); toast.appendChild(dismissBtn); toast.appendChild(timerInfo); undoContainer.appendChild(toast); entry.toastElem = toast;
+    let remaining = Math.floor(UNDO_TIMEOUT_MS / 1000); timerInfo.textContent = ' ('+remaining+'s)';
+    const intervalId = setInterval(function(){ remaining--; if (remaining <= 0) { timerInfo.textContent=''; clearInterval(intervalId); } else timerInfo.textContent = ' ('+remaining+'s)'; }, 1000);
     const timeoutId = setTimeout(function(){ if (entry.toastElem) entry.toastElem.remove(); entry.toastElem = null; clearInterval(intervalId); }, UNDO_TIMEOUT_MS);
-    undoBtn.addEventListener('click', function(){ const idx = deletedStack.findIndex(e => e.id === entry.id); if (idx !== -1) { const e=deletedStack[idx]; restoreDeletedEntry(e); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash(); } clearTimeout(timeoutId); clearInterval(intervalId); if (entry.toastElem) entry.toastElem.remove();});
+    undoBtn.addEventListener('click', function(){ const idx = deletedStack.findIndex(e => e.id === entry.id); if (idx !== -1) { const e = deletedStack[idx]; restoreDeletedEntry(e); deletedStack.splice(idx,1); saveDeletedStack(); renderTrash(); } clearTimeout(timeoutId); clearInterval(intervalId); if (entry.toastElem) entry.toastElem.remove(); });
     dismissBtn.addEventListener('click', function(){ clearTimeout(timeoutId); clearInterval(intervalId); if (entry.toastElem) entry.toastElem.remove(); entry.toastElem = null; });
   }
 
-  // Delegated row action clicks
-  table.addEventListener('click', function(e){
-    const t = e.target;
-    if (t.matches('.btn-insert-above')||t.matches('.btn-insert-below')||t.matches('.btn-delete')) {
-      const tr = t.closest('tr');
-      const rows = Array.prototype.slice.call(tbody.rows);
-      const idx = rows.indexOf(tr);
-      if (t.matches('.btn-insert-above')) addRowAt(idx);
-      else if (t.matches('.btn-insert-below')) addRowAt(idx+1);
-      else if (t.matches('.btn-delete')) { if (confirm(I18N.confirm.delete_row)) deleteRowWithUndo(tr); }
-    }
-  });
-
-  document.getElementById('restoreAllBtn').addEventListener('click', function(){
-    if (deletedStack.length === 0) return;
-    if (!confirm(I18N.confirm.restore_all)) return;
-    const copy = deletedStack.slice(); copy.sort((a,b)=>a.index-b.index); copy.forEach(function(e){ restoreDeletedEntry(e); });
-    deletedStack=[]; saveDeletedStack(); renderTrash();
-  });
-
-  document.getElementById('emptyTrashBtn').addEventListener('click', function(){
-    if (!confirm(I18N.confirm.empty_trash)) return;
-    clearAllDeletedStack();
-  });
-
-  // CSV form submit builds data (header + rows) and sets #csv_data
-  document.getElementById('csvForm').onsubmit = function(){
-    const data = [];
-    const headerRow = table.tHead.rows[0];
-    const header = [];
-    for (let i=0;i<headerRow.cells.length;i++){
-      const th = headerRow.cells[i];
-      if (th.classList.contains('action')) continue;
-      header.push(th.innerText);
-    }
-    data.push(header);
-    const bodyRows = tbody.rows;
-    for (let r=0;r<bodyRows.length;r++){
-      const row = bodyRows[r];
-      const rowData = [];
-      for (let c=0;c<row.cells.length;c++){
-        const cell = row.cells[c];
-        if (cell.classList.contains('actions')) continue;
-        rowData.push(cell.innerText);
-      }
-      while (rowData.length < header.length) rowData.push('');
-      data.push(rowData);
-    }
-    deletedStack.forEach(function(e){ if (e.toastElem) e.toastElem.remove(); });
-    deletedStack = []; sessionStorage.removeItem(STORAGE_KEY); renderTrash();
-    document.getElementById('csv_data').value = JSON.stringify(data);
-    return true;
-  };
-
-  // Ctrl/Cmd+Z restore last deleted
-  document.addEventListener('keydown', function(e){
-    const isMac = navigator.platform.toUpperCase().indexOf('MAC')>=0;
-    const modifier = isMac ? e.metaKey : e.ctrlKey;
-    if (modifier && e.key === 'z') {
-      if (deletedStack.length > 0) {
-        e.preventDefault();
-        const last = deletedStack.pop();
-        restoreDeletedEntry(last);
-        saveDeletedStack();
-        renderTrash();
-      }
-    }
-  });
-
-  // Initialize
+  // init
   renderTrash();
 })();
 </script>
