@@ -2,6 +2,7 @@
 /**
  * csv_html_editor.php
  * CSV HTML Editor (single-file, translations embedded)
+ * Version 21
  *
  * Usage:
  *   Place this file in a web-accessible directory alongside a subfolder `tables/`.
