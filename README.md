@@ -11,7 +11,6 @@ This repository contains:
 Important notes
 - The app only opens CSV files that already exist in `tables/`.
 - Versions are stored in `tables/versions/<csv_basename>_versions/`.
-- For translations, edit `translations.json`. On page load the PHP will merge the JSON translations over built-in defaults.
 - The UI supports English and German out of the box (detects Accept-Language and client locale).
 
 Quick start (local)
